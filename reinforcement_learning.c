@@ -6,6 +6,7 @@
 #include "util.h"
 
 static struct mutex rl_locks[2];
+static DEFINE_SPINLOCK(rl_lock);
 static u8 cells[] = {CELL_EMPTY, CELL_O, CELL_X};
 static rl_agent_t rl_agents[] = {
     [CELL_O - 1] = {.player = CELL_O},
@@ -35,16 +36,16 @@ int table_to_hash(unsigned int table)
 int play_rl(unsigned int table, char player)
 {
     int max_act = -1;
-    fixed_point_t max_q = FIXED_MIN;
+    rl_fxp max_q = RL_FIXED_MIN;
     const rl_agent_t *agent = &rl_agents[player - 1];
-    const fixed_point_t *state_value = agent->state_value;
+    const rl_fxp *state_value = agent->state_value;
     int candidate_count = 1;
-
-    mutex_lock(&rl_locks[player - 1]);
+    unsigned long flags;
+    spin_lock_irqsave(&rl_lock, flags);
     for_each_empty_grid(i, table)
     {
         table = VAL_SET_CELL(table, i, agent->player);
-        fixed_point_t new_q = state_value[table_to_hash(table)];
+        rl_fxp new_q = state_value[table_to_hash(table)];
         if (new_q == max_q) {
             ++candidate_count;
             if (get_random_u32() % candidate_count == 0) {
@@ -55,19 +56,18 @@ int play_rl(unsigned int table, char player)
             max_q = new_q;
             max_act = i;
         }
-        table = VAL_SET_CELL(table, i, CELL_EMPTY);
     }
-    mutex_unlock(&rl_locks[player - 1]);
+    spin_unlock_irqrestore(&rl_lock, flags);
     return max_act;
 }
 
-static inline fixed_point_t step_update_state_value(int after_state_hash,
-                                                    fixed_point_t reward,
-                                                    fixed_point_t next,
-                                                    char player)
+static inline rl_fxp step_update_state_value(int after_state_hash,
+                                             rl_fxp reward,
+                                             rl_fxp next,
+                                             char player)
 {
     rl_agent_t *agent = &rl_agents[player - 1];
-    fixed_point_t curr =
+    rl_fxp curr =
         reward - fixed_mul(GAMMA, next);  // curr is TD target in TD learning
                                           // and return/gain in MC learning.
     agent->state_value[after_state_hash] =
@@ -78,16 +78,17 @@ static inline fixed_point_t step_update_state_value(int after_state_hash,
 }
 
 void update_state_value(const int *after_state_hash,
-                        const fixed_point_t *reward,
+                        const rl_fxp *reward,
                         int steps,
                         char player)
 {
-    mutex_lock(&rl_locks[player - 1]);
-    fixed_point_t next = 0;
+    unsigned long flags;
+    spin_lock_irqsave(&rl_lock, flags);
+    rl_fxp next = 0;
     for (int j = steps - 1; j >= 0; j--)
         next = step_update_state_value(after_state_hash[j], reward[j], next,
                                        player);
-    mutex_unlock(&rl_locks[player - 1]);
+    spin_unlock_irqrestore(&rl_lock, flags);
 }
 
 void free_rl_agent(unsigned char player)
@@ -99,7 +100,7 @@ void init_rl_agent(unsigned int state_num, char player)
 {
     rl_agent_t *agent = &rl_agents[player - 1];
     mutex_init(&rl_locks[player - 1]);
-    agent->state_value = vmalloc(sizeof(fixed_point_t) * state_num);
+    agent->state_value = vmalloc(sizeof(rl_fxp) * state_num);
     if (!(agent->state_value))
         pr_info("Failed to allocate memory");
 

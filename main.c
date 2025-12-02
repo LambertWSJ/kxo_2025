@@ -51,17 +51,17 @@ static struct kxo_attr attr_obj;
 static struct ai_game games[N_GAMES];
 static struct ai_avg ai_avgs[N_GAMES];
 static struct xo_avg xo_avgs[N_GAMES];
-static ai_alg ai_algs[XO_AI_TOT] = {
-    [XO_AI_MCTS] = mcts,
-    [XO_AI_NEGAMAX] = negamax_predict,
-    [XO_AI_RL] = play_rl,
+static struct ai_agent agents[XO_AI_TOT] = {
+    [XO_AI_MCTS] = {.play = mcts, .name = "MCTS"},
+    [XO_AI_NEGAMAX] = {.play = negamax_predict, .name = "NEGAMAX"},
+    [XO_AI_RL] = {.play = play_rl, .name = "RL"},
 };
 
 static struct task_struct *rl_init_thr;
 static bool rl_inited;
 static DECLARE_COMPLETION(rl_comp);
 static int episode_moves[N_GAMES][N_GRIDS] = {0};
-static fixed_point_t reward[N_GAMES][N_GRIDS] = {0};
+static rl_fxp reward[N_GAMES][N_GRIDS] = {0};
 
 static ssize_t kxo_state_show(struct device *dev,
                               struct device_attribute *attr,
@@ -202,10 +202,11 @@ static void ai_one_work_func(struct work_struct *w)
     tv_start = ktime_get();
     mutex_lock(&game->lock);
     int move;
-    int alg = (XO_ATTR_AI_ALG(attr) % (XO_AI_TOT - !rl_inited));
-    bool is_rl = alg == XO_AI_RL && rl_inited;
-    pr_debug("[one]: id=%d, alg=%d, rl_init=%d\n", id, alg, rl_inited);
-    WRITE_ONCE(move, ai_algs[alg](table, CELL_O));
+    int who = (XO_ATTR_AI_ALG(attr) % (XO_AI_TOT - !rl_inited));
+    bool is_rl = who == XO_AI_RL && rl_inited;
+    struct ai_agent *agent = &agents[who];
+    pr_debug("[one]: id=%d, alg=%d, rl_init=%d\n", id, who, rl_inited);
+    WRITE_ONCE(move, agent->play(table, CELL_O));
     smp_mb();
 
     if (move != -1) {
@@ -216,8 +217,8 @@ static void ai_one_work_func(struct work_struct *w)
             table = xo_tlb->table;
             u8 win = check_win(table);
             episode_moves[id][steps] = table_to_hash(table);
-            fixed_point_t score = fixed_mul_s32((RL_FIXED_1 - REWARD_TRADEOFF),
-                                                get_score(table, CELL_O));
+            rl_fxp score = fixed_mul_s32((RL_FIXED_1 - REWARD_TRADEOFF),
+                                         get_score(table, CELL_O));
             reward[id][steps] = score + calculate_win_value(win, CELL_O);
         }
         WRITE_ONCE(xo_tlb->attr, XO_SET_ATTR_STEPS(attr, steps + 1));
@@ -235,8 +236,8 @@ static void ai_one_work_func(struct work_struct *w)
     ai_avgs[id].nsecs_o += nsecs;
     mutex_unlock(&avg_lock);
 
-    pr_info("kxo: [CPU#%d] game-%d %s completed in %llu usec\n", cpu, id,
-            __func__, (unsigned long long) nsecs >> 10);
+    pr_info("kxo: [CPU#%d] game-%d %s:%s completed in %llu usec\n", cpu, id,
+            __func__, agent->name, (unsigned long long) nsecs >> 10);
     put_cpu();
 }
 
@@ -260,10 +261,11 @@ static void ai_two_work_func(struct work_struct *w)
     tv_start = ktime_get();
     mutex_lock(&game->lock);
     int move;
-    int alg = ((XO_ATTR_AI_ALG(attr) >> 2) % (XO_AI_TOT - !rl_inited));
-    bool is_rl = alg == XO_AI_RL && rl_inited;
-    pr_debug("[two]: id=%d, alg=%d, rl_init=%d\n", id, alg, rl_inited);
-    WRITE_ONCE(move, ai_algs[alg](table, CELL_X));
+    int who = ((XO_ATTR_AI_ALG(attr) >> 2) % (XO_AI_TOT - !rl_inited));
+    bool is_rl = who == XO_AI_RL && rl_inited;
+    struct ai_agent *agent = &agents[who];
+    pr_debug("[two]: id=%d, alg=%d, rl_init=%d\n", id, who, rl_inited);
+    WRITE_ONCE(move, agent->play(table, CELL_X));
     smp_mb();
 
     if (move != -1) {
@@ -274,8 +276,8 @@ static void ai_two_work_func(struct work_struct *w)
             table = xo_tlb->table;
             u8 win = check_win(table);
             episode_moves[id][steps] = table_to_hash(table);
-            fixed_point_t score = fixed_mul_s32((RL_FIXED_1 - REWARD_TRADEOFF),
-                                                get_score(table, CELL_X));
+            rl_fxp score = fixed_mul_s32((RL_FIXED_1 - REWARD_TRADEOFF),
+                                         get_score(table, CELL_X));
             reward[id][steps] = score + calculate_win_value(win, CELL_X);
         }
         WRITE_ONCE(xo_tlb->attr, XO_SET_ATTR_STEPS(attr, steps + 1));
@@ -293,8 +295,8 @@ static void ai_two_work_func(struct work_struct *w)
     ai_avgs[id].nsecs_x += nsecs;
     mutex_unlock(&avg_lock);
 
-    pr_info("kxo: [CPU#%d] game-%d %s completed in %llu usec\n", cpu, id,
-            __func__, (unsigned long long) nsecs >> 10);
+    pr_info("kxo: [CPU#%d] game-%d %s:%s completed in %llu usec\n", cpu, id,
+            __func__, agent->name, (unsigned long long) nsecs >> 10);
     put_cpu();
 }
 
@@ -570,8 +572,13 @@ static int kxo_release(struct inode *inode, struct file *filp)
 {
     pr_debug("kxo: %s\n", __func__);
     if (atomic_dec_and_test(&open_cnt)) {
+#if LINUX_VERSION_CODE > KERNEL_VERSION(6, 15, 0)
+        timer_delete_sync(&timer);
+        timer_delete_sync(&loadavg_timer);
+#else
         del_timer_sync(&timer);
         del_timer_sync(&loadavg_timer);
+#endif
         flush_workqueue(kxo_workqueue);
         fast_buf_clear();
     }
@@ -713,9 +720,13 @@ error_alloc:
 static void __exit kxo_exit(void)
 {
     dev_t dev_id = MKDEV(major, 0);
-
+#if LINUX_VERSION_CODE > KERNEL_VERSION(6, 15, 0)
+    timer_delete_sync(&timer);
+    timer_delete_sync(&loadavg_timer);
+#else
     del_timer_sync(&timer);
     del_timer_sync(&loadavg_timer);
+#endif
     tasklet_kill(&game_tasklet);
     flush_workqueue(kxo_workqueue);
     destroy_workqueue(kxo_workqueue);
