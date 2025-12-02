@@ -85,12 +85,12 @@ static void listen_keyboard_handler(enum tui_tab *tab)
     close(attr_fd);
 }
 
-void task_print_now(int argc, void *argv[])
+static void task_print_now(int argc, void UNUSED *argv[])
 {
     print_now();
 }
 
-void task_io(int argc, void *argv[])
+static void task_io(int argc, void *argv[])
 {
     neco_chan *chan = argv[0];
     struct task_obj *tobj = (struct task_obj *) argv[1];
@@ -125,7 +125,7 @@ void task_io(int argc, void *argv[])
     neco_chan_send(chan, &tobj);
 }
 
-void task_tab(int argc, void *argv[])
+static void task_tab(int argc, void *argv[])
 {
     neco_chan *chan = argv[0];
     struct task_obj *tobj;

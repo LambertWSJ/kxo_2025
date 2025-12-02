@@ -2,6 +2,8 @@
 
 #include <linux/ioctl.h>
 
+#define UNUSED __attribute__((unused))
+
 #define BOARD_SIZE 4
 #define GOAL 3
 #define ALLOW_EXCEED 1
@@ -66,7 +68,6 @@ enum {
 #define FIXED_SCALE_BITS 16
 #define FIXED_MAX (~0U)
 #define FIXED_MIN (0U)
-#define RL_FIXED_1 (1 << FIXED_SCALE_BITS)
 #define GET_SIGN(x) ((x) & (1U << 31))
 #define SET_SIGN(x) ((x) | (1U << 31))
 #define CLR_SIGN(x) ((x) & ((1U << 31) - 1U))

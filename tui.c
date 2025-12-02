@@ -35,7 +35,6 @@
 #define COLOR_GREEN "\033[32m"
 #define o_ch COLOR_GREEN "O" COLOR_RESET
 #define x_ch COLOR_RED "X" COLOR_RESET
-#define UNUSED __attribute__((unused))
 
 #define MIN_COLS 55
 #define MIN_ROWS 21
@@ -221,7 +220,7 @@ static void gotoxy(int x, int y)
     outbuf_printf("\033[%d;%dH", y, x);
 }
 
-void disable_raw()
+static void disable_raw()
 {
     safe_write(STDOUT_FILENO, ALT_BUF_DISABLE, sizeof(ALT_BUF_DISABLE) - 1);
     outbuf_flush();
