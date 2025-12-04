@@ -1,5 +1,7 @@
 TARGET = kxo
-kxo-objs = main.o game.o xoroshiro.o mcts.o negamax.o zobrist.o reinforcement_learning.o
+RL_USE_HT=YES
+kxo-objs = main.o game.o xoroshiro.o mcts.o negamax.o zobrist.o
+kxo-objs += reinforcement_learning.o
 obj-m := $(TARGET).o
 OBJS:=
 
@@ -18,6 +20,12 @@ OBJS:=
 OBJS+=xo-user.o
 OBJS+=tui.o
 OBJS+=./neco/neco.o
+
+ifeq ($(RL_USE_HT), YES)
+kxo-objs += rl_find_state_ht.o
+else
+kxo-objs += rl_find_state_rb.o
+endif
 
 all: kmod xo-user
 

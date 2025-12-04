@@ -26,7 +26,7 @@
     set_bits(attr, (ai1) | (ai2) << 2, 0xf, 0x8)
 #define SET_RECORD_CELL(moves, step, n) set_bits64(moves, step, 0xful, n * 4u)
 #define GET_RECORD_CELL(moves, id) get_bits64(moves, 0xful, id * 4u)
-#define XO_IOCTL_MAGIC 0xbeaf
+#define XO_IOCTL_MAGIC 0x6f786b /* kxo */
 #define XO_IO_LDAVG _IOR(XO_IOCTL_MAGIC, 1, struct xo_avg[N_GAMES])
 
 #define GEN_O_WINMASK(a, b, c) \

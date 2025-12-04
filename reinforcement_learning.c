@@ -1,56 +1,28 @@
+#include <linux/spinlock_types.h>
+#include <linux/random.h>
 
-#include "reinforcement_learning.h"
-#include <linux/slab.h>
-#include <linux/vmalloc.h>
 #include "ai_game.h"
-#include "util.h"
+#include "reinforcement_learning.h"
+#include "rl_private.h"
 
-static struct mutex rl_locks[2];
 static DEFINE_SPINLOCK(rl_lock);
-static u8 cells[] = {CELL_EMPTY, CELL_O, CELL_X};
-static rl_agent_t rl_agents[] = {
-    [CELL_O - 1] = {.player = CELL_O},
-    [CELL_X - 1] = {.player = CELL_X},
-};
-
-static unsigned int hash_to_table(int hash)
-{
-    int table = 0;
-    for (int i = N_GRIDS - 1; i >= 0; i--) {
-        table = VAL_SET_CELL(table, i, cells[hash % 3]);
-        hash /= 3;
-    }
-    return table;
-}
-
-int table_to_hash(unsigned int table)
-{
-    int ret = 0;
-    for (int i = 0; i < N_GRIDS; i++) {
-        ret *= 3;
-        ret += TABLE_GET_CELL(table, i) % CELL_D;
-    }
-    return ret;
-}
 
 int play_rl(unsigned int table, char player)
 {
     int max_act = -1;
     rl_fxp max_q = RL_FIXED_MIN;
-    const rl_agent_t *agent = &rl_agents[player - 1];
-    const rl_fxp *state_value = agent->state_value;
     int candidate_count = 1;
+    u8 id = player - 1;
     unsigned long flags;
     spin_lock_irqsave(&rl_lock, flags);
     for_each_empty_grid(i, table)
     {
-        table = VAL_SET_CELL(table, i, agent->player);
-        rl_fxp new_q = state_value[table_to_hash(table)];
+        table = VAL_SET_CELL(table, i, player);
+        rl_fxp new_q = find_rl_state(table)[id];
         if (new_q == max_q) {
             ++candidate_count;
-            if (get_random_u32() % candidate_count == 0) {
+            if (get_random_u32() % candidate_count == 0)
                 max_act = i;
-            }
         } else if (new_q > max_q) {
             candidate_count = 1;
             max_q = new_q;
@@ -61,20 +33,17 @@ int play_rl(unsigned int table, char player)
     return max_act;
 }
 
+/* player assume always AGENT_O or AGENT_X */
 static inline rl_fxp step_update_state_value(int after_state_hash,
                                              rl_fxp reward,
                                              rl_fxp next,
-                                             char player)
+                                             u8 player)
 {
-    rl_agent_t *agent = &rl_agents[player - 1];
-    rl_fxp curr =
-        reward - fixed_mul(GAMMA, next);  // curr is TD target in TD learning
-                                          // and return/gain in MC learning.
-    agent->state_value[after_state_hash] =
-        fixed_mul((RL_FIXED_1 - LEARNING_RATE),
-                  agent->state_value[after_state_hash]) +
-        fixed_mul(LEARNING_RATE, curr);
-    return agent->state_value[after_state_hash];
+    rl_fxp curr = reward - fixed_mul(GAMMA, next);
+    rl_fxp *scores = find_rl_state(after_state_hash);
+    scores[player] = fixed_mul((RL_FIXED_1 - LEARNING_RATE), scores[player]) +
+                     fixed_mul(LEARNING_RATE, curr);
+    return scores[player];
 }
 
 void update_state_value(const int *after_state_hash,
@@ -87,25 +56,6 @@ void update_state_value(const int *after_state_hash,
     rl_fxp next = 0;
     for (int j = steps - 1; j >= 0; j--)
         next = step_update_state_value(after_state_hash[j], reward[j], next,
-                                       player);
+                                       player - 1);
     spin_unlock_irqrestore(&rl_lock, flags);
-}
-
-void free_rl_agent(unsigned char player)
-{
-    vfree(rl_agents[player - 1].state_value);
-}
-
-void init_rl_agent(unsigned int state_num, char player)
-{
-    rl_agent_t *agent = &rl_agents[player - 1];
-    mutex_init(&rl_locks[player - 1]);
-    agent->state_value = vmalloc(sizeof(rl_fxp) * state_num);
-    if (!(agent->state_value))
-        pr_info("Failed to allocate memory");
-
-    for (unsigned int i = 0; i < state_num; i++) {
-        agent->state_value[i] = fixed_mul_s32(
-            INITIAL_MUTIPLIER, get_score(hash_to_table(i), player));
-    }
 }

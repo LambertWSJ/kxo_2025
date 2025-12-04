@@ -31,7 +31,7 @@ struct ai_agent {
 
 static inline rl_fxp fixed_mul(rl_fxp a, rl_fxp b)
 {
-    return ((s64) a * b) >> FIXED_SCALE_BITS;
+    return ((s64) a * b) >> RL_FIXED_SCALE_BITS;
 }
 
 static inline rl_fxp fixed_mul_s32(rl_fxp a, s32 b)
