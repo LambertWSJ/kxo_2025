@@ -132,7 +132,8 @@ static void task_tab(int argc, void *argv[])
     uintptr_t ptr = 0;
     neco_chan_recv(chan, &ptr);
     tobj = (struct task_obj *) ptr;
-    tui_update_tab(tobj->tab, &tobj->tlb);
+    if (read_attr)
+        tui_update_tab(tobj->tab, &tobj->tlb);
 }
 
 int neco_main(int argc, char *argv[])
