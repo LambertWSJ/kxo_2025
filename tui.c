@@ -272,7 +272,8 @@ char *load_logo(const char *file)
     fstat(fd, &st);
     size_t sz = st.st_size;
 
-    char *buf = malloc(sz);
+    char *buf = malloc(sz + 1);
+    buf[sz] = '\0';
     read(fd, buf, sz);
     close(fd);
     return buf;
