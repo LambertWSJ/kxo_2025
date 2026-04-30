@@ -15,6 +15,7 @@
 #include <unistd.h>
 
 #include "game.h"
+#include "neco.h"
 #include "tui.h"
 
 #define max(a, b) ((a) > (b) ? (a) : (b))
@@ -222,8 +223,7 @@ static void gotoxy(int x, int y)
 
 static void disable_raw()
 {
-    safe_write(STDOUT_FILENO, ALT_BUF_DISABLE, sizeof(ALT_BUF_DISABLE) - 1);
-    outbuf_flush();
+    write(STDOUT_FILENO, ALT_BUF_DISABLE, sizeof(ALT_BUF_DISABLE) - 1);
     raw_mode_disable();
 }
 
@@ -516,9 +516,10 @@ static void draw_tab_border(const enum tui_tab tab)
 
 static void xo_record(const enum tui_tab tab, const struct xo_table *tlb)
 {
-    if (tab != prev_tab) {
+    LOG_ENTRY();
+    if (tab != prev_tab)
         draw_tab_border(tab);
-    }
+
     prev_tab = tab;
     unsigned long moves = tlb->moves;
     int steps = XO_ATTR_STEPS(tlb->attr);
@@ -539,11 +540,14 @@ static void xo_record(const enum tui_tab tab, const struct xo_table *tlb)
         xy[0] = 'A' + (mv & 3);
         xy[1] = '1' + (mv / BOARD_SIZE);
         outbuf_printf(" %s %s", xy, i == steps - 1 ? " " : "🠮");
+        neco_yield();
     }
+    LOG_LEAVE();
 }
 
 static void render_loadavg(const enum tui_tab tab)
 {
+    LOG_ENTRY();
     int y = 52;
     draw_tab_border(tab);
     ioctl(device_fd, XO_IO_LDAVG, xo_avgs);
@@ -556,7 +560,9 @@ static void render_loadavg(const enum tui_tab tab)
             "Game-%d               %d.%02d                      %d.%02d", i,
             (xo_avgs[i].avg_o & 0x780) >> 7, xo_avgs[i].avg_o & 0x7f,
             (xo_avgs[i].avg_x & 0x780) >> 7, xo_avgs[i].avg_x & 0x7f);
+        neco_yield();
     }
+    LOG_LEAVE();
 }
 
 static void xo_loadavg(const enum tui_tab tab,

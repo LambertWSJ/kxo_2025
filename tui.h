@@ -45,3 +45,11 @@ void render_board(const struct xo_table *tlb, int n);
 void tui_update_tab(enum tui_tab, const struct xo_table *tlb);
 
 void stop_message(bool stop);
+
+#ifdef CORO_TRACE
+#define LOG_ENTRY() fprintf(stderr, "-> %s\n", __FUNCTION__)
+#define LOG_LEAVE() fprintf(stderr, "<- %s\n", __FUNCTION__)
+#else
+#define LOG_ENTRY()
+#define LOG_LEAVE()
+#endif

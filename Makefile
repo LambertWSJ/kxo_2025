@@ -27,7 +27,13 @@ else
 kxo-objs += rl_find_state_rb.o
 endif
 
-all: kmod xo-user
+ifeq ($(CORO_TRACE), 1)
+CFLAGS+=-DCORO_TRACE
+else
+CFLAGS+=
+endif
+
+all: kmod check-neco xo-user
 
 kmod: $(GIT_HOOKS) main.c
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
@@ -37,6 +43,12 @@ xo-user: $(OBJS)
 
 %.o: %c
 	$(CC) $< $(CFLAGS) -c -o $@
+
+check-neco:
+	@if [ ! -d neco ] || [ -z "$$(ls -A neco)" ]; then \
+		echo "neco submodule not found, initializing..."; \
+		git submodule update --init neco; \
+	fi
 
 logo:
 	cat logo.txt | lolcat -f > logof.txt && cat ./logof.txt

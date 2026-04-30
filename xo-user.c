@@ -92,6 +92,7 @@ static void task_print_now(int argc, void UNUSED *argv[])
 
 static void task_io(int argc, void *argv[])
 {
+    LOG_ENTRY();
     neco_chan *chan = argv[0];
     struct task_obj *tobj = (struct task_obj *) argv[1];
     int device_fd = *(int *) argv[2];
@@ -123,6 +124,8 @@ static void task_io(int argc, void *argv[])
     }
     stop_message(!read_attr);
     neco_chan_send(chan, &tobj);
+    neco_yield();
+    LOG_LEAVE();
 }
 
 static void task_tab(int argc, void *argv[])
@@ -160,9 +163,10 @@ int neco_main(int argc, char *argv[])
     neco_chan *chan = NULL;
     neco_chan_make(&chan, sizeof(struct task_obj), 0x10);
     while (!end_attr) {
-        neco_start(task_print_now, 0);
+        print_now();
         neco_start(task_io, 4, chan, &tobj, &device_fd, &max_fd);
         neco_start(task_tab, 1, chan);
+        neco_sleep(100 * NECO_MICROSECOND);
         outbuf_flush();
     }
     neco_chan_release(chan);
