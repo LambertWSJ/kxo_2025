@@ -123,7 +123,7 @@ static void task_io(int argc, void *argv[])
         tobj->tlb = xo_tlb;
     }
     stop_message(!read_attr);
-    neco_chan_send(chan, &tobj);
+    neco_chan_send(chan, tobj);
     neco_yield();
     LOG_LEAVE();
 }
@@ -131,12 +131,11 @@ static void task_io(int argc, void *argv[])
 static void task_tab(int argc, void *argv[])
 {
     neco_chan *chan = argv[0];
-    struct task_obj *tobj;
-    uintptr_t ptr = 0;
-    neco_chan_recv(chan, &ptr);
-    tobj = (struct task_obj *) ptr;
+    struct task_obj tobj;
+    memset(&tobj, 0, sizeof(struct task_obj));
+    neco_chan_recv(chan, &tobj);
     if (read_attr)
-        tui_update_tab(tobj->tab, &tobj->tlb);
+        tui_update_tab(tobj.tab, &tobj.tlb);
 }
 
 int neco_main(int argc, char *argv[])
