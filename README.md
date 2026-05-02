@@ -1,3 +1,9 @@
+
+>[!NOTE]
+>Forked from [sysprog21/kxo](https://github.com/sysprog21/kxo) ([Linux Kernel Internals](http://wiki.csie.ncku.edu.tw/linux/schedule) course assignment).
+>
+>Detached to preserve my 2025 coursework as an independent record.
+
 # kxo: A Tic-Tac-Toe Game Engine implemented as Linux kernel module
 
 ## Introduction
