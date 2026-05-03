@@ -36,7 +36,7 @@ MODULE_DESCRIPTION("In-kernel Tic-Tac-Toe game engine");
 
 #define NR_KMLDRV 1
 
-static int avg_period = 1000;
+static int avg_period = 5000;
 static int delay = 100; /* time (in ms) to generate an event */
 /* Declare kernel module attribute for sysfs */
 
@@ -90,6 +90,7 @@ static DEVICE_ATTR_RW(kxo_state);
 /* Timer to simulate a periodic IRQ */
 static struct timer_list timer;
 static struct timer_list loadavg_timer;
+static ktime_t loadavg_start;
 
 /* Character device stuff */
 static int major;
@@ -347,19 +348,13 @@ static void ai_game(void)
 
 static void loadavg_handler(struct timer_list *__timer)
 {
-    static ktime_t tv_end = 0;
-    ktime_t tv_start;
+    ktime_t loadavg_end;
     s64 delta;
 
+    loadavg_end = ktime_get();
+    delta = ktime_to_ns(ktime_sub(loadavg_end, loadavg_start));
+    loadavg_start = loadavg_end;
 
-    tv_start = ktime_get();
-    if (!tv_end) {
-        tv_end = tv_start;
-        goto leave;
-    }
-
-    delta = ktime_to_ns(ktime_sub(tv_start, tv_end));
-    tv_end = tv_start;
     mutex_lock(&avg_lock);
     for (int i = 0; i < N_GAMES; i++) {
         struct ai_avg *avg = &ai_avgs[i];
@@ -394,7 +389,6 @@ static void loadavg_handler(struct timer_list *__timer)
             x_frac, o_int, o_frac);
     }
     mutex_unlock(&avg_lock);
-leave:
     mod_timer(&loadavg_timer, jiffies + msecs_to_jiffies(avg_period));
 }
 
@@ -430,8 +424,7 @@ static void timer_handler(struct timer_list *__timer)
             else {
                 int alg = XO_ATTR_AI_ALG(xo_tlb->attr);
                 pr_info("kxo: game-%d %4s vs %-4s Draw!!!\n", id,
-                        agents[alg & 0x3].name,
-                        agents[(alg >> 2) & 0x3].name);
+                        agents[alg & 0x3].name, agents[(alg >> 2) & 0x3].name);
             }
 
             read_lock(&attr_obj.lock);
@@ -524,6 +517,7 @@ static int kxo_open(struct inode *inode, struct file *filp)
 {
     pr_debug("kxo: %s\n", __func__);
     if (atomic_inc_return(&open_cnt) == 1) {
+        loadavg_start = ktime_get();
         mod_timer(&timer, jiffies + msecs_to_jiffies(delay));
         mod_timer(&loadavg_timer, jiffies + msecs_to_jiffies(avg_period));
     }
