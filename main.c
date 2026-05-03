@@ -186,7 +186,7 @@ static void ai_one_work_func(struct work_struct *w)
     tv_start = ktime_get();
     mutex_lock(&game->lock);
     int move;
-    int who = XO_ATTR_AI_ALG(attr) % XO_AI_TOT;
+    int who = XO_ATTR_AI_ALG(attr) & 0x3;
     bool is_rl = who == XO_AI_RL;
     struct ai_agent *agent = &agents[who];
     pr_debug("[one]: id=%d, alg=%d\n", id, who);
@@ -245,7 +245,7 @@ static void ai_two_work_func(struct work_struct *w)
     tv_start = ktime_get();
     mutex_lock(&game->lock);
     int move;
-    int who = (XO_ATTR_AI_ALG(attr) >> 2) % XO_AI_TOT;
+    int who = (XO_ATTR_AI_ALG(attr) >> 2) & 0x3;
     bool is_rl = who == XO_AI_RL;
     struct ai_agent *agent = &agents[who];
     pr_debug("[two]: id=%d, alg=%d\n", id, who);
@@ -430,8 +430,8 @@ static void timer_handler(struct timer_list *__timer)
             else {
                 int alg = XO_ATTR_AI_ALG(xo_tlb->attr);
                 pr_info("kxo: game-%d %4s vs %-4s Draw!!!\n", id,
-                        agents[alg % XO_AI_TOT].name,
-                        agents[(alg >> 2) % XO_AI_TOT].name);
+                        agents[alg & 0x3].name,
+                        agents[(alg >> 2) & 0x3].name);
             }
 
             read_lock(&attr_obj.lock);

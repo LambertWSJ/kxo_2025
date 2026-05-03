@@ -412,8 +412,7 @@ void update_table(const struct xo_table *xo_tlb)
     const char *cell_tlb[] = {" ", o_ch, x_ch};
     int id = XO_ATTR_ID(xo_tlb->attr);
     int alg = XO_ATTR_AI_ALG(xo_tlb->attr);
-    const char *o_alg = ai_name[alg % XO_AI_TOT],
-               *x_alg = ai_name[(alg >> 2) % XO_AI_TOT];
+    const char *o_alg = ai_name[alg & 0x3], *x_alg = ai_name[(alg >> 2) & 0x3];
     unsigned int table = xo_tlb->table;
     int y = BOARD_BASEY + (id / UI_COLS) * (BOARD_H - 1);
 
