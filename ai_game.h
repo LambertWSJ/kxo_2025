@@ -8,10 +8,8 @@
 typedef int (*ai_alg)(unsigned int table, char player);
 
 struct ai_avg {
-    s64 nsecs_o;
-    s64 nsecs_x;
-    u64 load_avg_o;
-    u64 load_avg_x;
+    u64 nsecs;
+    u64 load_avg;
 };
 
 struct ai_game {

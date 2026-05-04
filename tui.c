@@ -533,7 +533,7 @@ static void xo_record(const enum tui_tab tab, const struct xo_table *tlb)
     }
     int x = 11;
     gotoxy(x, y + id);
-    outbuf_printf("%77s", " ");
+    outbuf_printf("%80s", " ");
     gotoxy(x, y + id);
     for (int i = 0; i < steps; i++) {
         uint8_t mv = GET_RECORD_CELL(moves, i);
@@ -551,17 +551,20 @@ static void render_loadavg(const enum tui_tab tab)
     int y = 52;
     draw_tab_border(tab);
     ioctl(device_fd, XO_IO_LDAVG, xo_avgs);
-    gotoxy(17, y);
-    outbuf_printf("Load avg 1min             %s                         %s",
-                  o_ch, x_ch);
+    gotoxy(8, y);
+    /* clang-format off */
+    outbuf_printf("Load avg 1 min          MCTS                     NEGAMAX                    RL");
     for (int i = 0; i < N_GAMES; i++) {
-        gotoxy(20, y + i + 1);
+        gotoxy(11, y + i + 1);
         outbuf_printf(
-            "Game-%d               %d.%02d                      %d.%02d", i,
-            (xo_avgs[i].avg_o & 0x780) >> 7, xo_avgs[i].avg_o & 0x7f,
-            (xo_avgs[i].avg_x & 0x780) >> 7, xo_avgs[i].avg_x & 0x7f);
+            "Game-%d              %2d.%02d                      %2d.%02d                   %2d.%02d", i,
+            (xo_avgs[i].avgs[XO_AI_MCTS] & 0x780) >> 7   , xo_avgs[i].avgs[XO_AI_MCTS] & 0x7f,
+            (xo_avgs[i].avgs[XO_AI_NEGAMAX] & 0x780) >> 7, xo_avgs[i].avgs[XO_AI_NEGAMAX] & 0x7f,
+            (xo_avgs[i].avgs[XO_AI_RL] & 0x780) >> 7     , xo_avgs[i].avgs[XO_AI_RL] & 0x7f
+        );
         neco_yield();
     }
+    /* clang-format on */
     LOG_LEAVE();
 }
 

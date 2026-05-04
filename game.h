@@ -40,6 +40,13 @@
     for (int i = 0; i < N_GRIDS; i++) \
         if (TABLE_GET_CELL(table, i) == CELL_EMPTY)
 
+enum {
+    XO_AI_MCTS,
+    XO_AI_NEGAMAX,
+    XO_AI_RL,
+    XO_AI_TOT,
+};
+
 typedef struct {
     int i_shift, j_shift;
     int i_lower_bound, j_lower_bound, i_upper_bound, j_upper_bound;
@@ -52,15 +59,7 @@ struct xo_table {
 };
 
 struct xo_avg {
-    unsigned short avg_x;
-    unsigned short avg_o;
-};
-
-enum {
-    XO_AI_MCTS,
-    XO_AI_NEGAMAX,
-    XO_AI_RL,
-    XO_AI_TOT,
+    unsigned short avgs[XO_AI_TOT];
 };
 
 /* Self-defined fixed-point type, using last 10 bits as fractional bits,

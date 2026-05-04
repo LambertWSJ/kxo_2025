@@ -49,7 +49,7 @@ struct kxo_attr {
 
 static struct kxo_attr attr_obj;
 static struct ai_game games[N_GAMES];
-static struct ai_avg ai_avgs[N_GAMES];
+static struct ai_avg ai_avgs[N_GAMES][XO_AI_TOT];
 static struct xo_avg xo_avgs[N_GAMES];
 static struct ai_agent agents[XO_AI_TOT] = {
     [XO_AI_MCTS] = {.play = mcts, .name = "MCTS"},
@@ -218,7 +218,7 @@ static void ai_one_work_func(struct work_struct *w)
 
     nsecs = (s64) ktime_to_ns(ktime_sub(tv_end, tv_start));
     mutex_lock(&avg_lock);
-    ai_avgs[id].nsecs_o += nsecs;
+    ai_avgs[id][who].nsecs += nsecs;
     mutex_unlock(&avg_lock);
 
     pr_info("kxo: [CPU#%d] game-%d %s:%s completed in %llu usec\n", cpu, id,
@@ -277,7 +277,7 @@ static void ai_two_work_func(struct work_struct *w)
 
     nsecs = (s64) ktime_to_ns(ktime_sub(tv_end, tv_start));
     mutex_lock(&avg_lock);
-    ai_avgs[id].nsecs_x += nsecs;
+    ai_avgs[id][who].nsecs += nsecs;
     mutex_unlock(&avg_lock);
 
     pr_info("kxo: [CPU#%d] game-%d %s:%s completed in %llu usec\n", cpu, id,
@@ -357,36 +357,24 @@ static void loadavg_handler(struct timer_list *__timer)
 
     mutex_lock(&avg_lock);
     for (int i = 0; i < N_GAMES; i++) {
-        struct ai_avg *avg = &ai_avgs[i];
-        u64 ratio;
-        if (avg->nsecs_o) {
-            ratio = div64_u64(avg->nsecs_o * FIXED_1, delta);
-            pr_debug("kxo: avg->nsecs_o=%llu\n", avg->nsecs_o);
-            avg->load_avg_o = calc_load(avg->load_avg_o, EXP_1, ratio);
-            avg->nsecs_o = 0;
+        for (int j = 0; j < XO_AI_TOT; j++) {
+            struct ai_avg *avg = &ai_avgs[i][j];
+            u64 ratio = div64_u64(avg->nsecs * FIXED_1, delta);
+            avg->load_avg = calc_load(avg->load_avg, EXP_1, ratio);
+            pr_info("kxo: [%s]avg->nsecs=%llu, load_avg=%llu\n", agents[j].name,
+                    avg->nsecs, avg->load_avg);
+
+            avg->nsecs = 0;
+            xo_avgs[i].avgs[j] = (LOAD_INT(avg->load_avg) << 7) +
+                                 (LOAD_FRAC(avg->load_avg) & 0x7f);
         }
 
-        if (avg->nsecs_x) {
-            ratio = div64_u64(avg->nsecs_x * FIXED_1, delta);
-            pr_debug("kxo: avg->nsecs_x=%llu\n", avg->nsecs_x);
-            avg->load_avg_x = calc_load(avg->load_avg_x, EXP_1, ratio);
-            avg->nsecs_x = 0;
-        }
-
-        const u16 x_int = LOAD_INT(avg->load_avg_x);
-        const u16 x_frac = LOAD_FRAC(avg->load_avg_x);
-        const u16 o_int = LOAD_INT(avg->load_avg_o);
-        const u16 o_frac = LOAD_FRAC(avg->load_avg_o);
-
-        xo_avgs[i].avg_x = (x_int << 7) + (x_frac & 0x7f);
-        xo_avgs[i].avg_o = (o_int << 7) + (o_frac & 0x7f);
-
-        pr_debug(
-            "kxo[%d] avg_x = %d.%02d, avg_o = %d.%02d ! avg_x = %d.%02d, avg_o "
-            "= %d.%02d\n",
-            i, (xo_avgs[i].avg_x & 0x780) >> 7, xo_avgs[i].avg_x & 0x7f,
-            (xo_avgs[i].avg_o & 0x780) >> 7, xo_avgs[i].avg_o & 0x7f, x_int,
-            x_frac, o_int, o_frac);
+        /* clang-format off */
+        pr_info("kxo[%d] avgs = %d.%02d, %d.%02d, %d.%02d\n", i,
+            (xo_avgs[i].avgs[XO_AI_MCTS] & 0x780) >> 7,    xo_avgs[i].avgs[XO_AI_MCTS] & 0x7f,
+            (xo_avgs[i].avgs[XO_AI_NEGAMAX] & 0x780) >> 7, xo_avgs[i].avgs[XO_AI_NEGAMAX] & 0x7f,
+            (xo_avgs[i].avgs[XO_AI_RL] & 0x780) >> 7,      xo_avgs[i].avgs[XO_AI_RL] & 0x7f);
+        /* clang-format on */
     }
     mutex_unlock(&avg_lock);
     mod_timer(&loadavg_timer, jiffies + msecs_to_jiffies(avg_period));
