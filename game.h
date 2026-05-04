@@ -19,11 +19,11 @@
 #define CELL_D 3u
 #define ATTR_MSK 0xfu
 #define XO_ATTR_ID(attr) (attr & ATTR_MSK)
-#define XO_ATTR_STEPS(attr) get_bits(attr, 0xf, 4)
-#define XO_ATTR_AI_ALG(attr) get_bits(attr, 0xf, 8)
-#define XO_SET_ATTR_STEPS(attr, steps) set_bits(attr, steps, 0xf, 0x4)
+#define XO_ATTR_STEPS(attr) get_bits(attr, 0x1f, 4)
+#define XO_ATTR_AI_ALG(attr) get_bits(attr, 0xf, 9)
+#define XO_SET_ATTR_STEPS(attr, steps) set_bits(attr, steps, 0x1f, 0x4)
 #define XO_SET_ATTR_AI_ALG(attr, ai1, ai2) \
-    set_bits(attr, (ai1) | (ai2) << 2, 0xf, 0x8)
+    set_bits(attr, (ai1) | (ai2) << 2, 0xf, 0x9)
 #define SET_RECORD_CELL(moves, step, n) set_bits64(moves, step, 0xful, n * 4u)
 #define GET_RECORD_CELL(moves, id) get_bits64(moves, 0xful, id * 4u)
 #define XO_IOCTL_MAGIC 0x6f786b /* kxo */
